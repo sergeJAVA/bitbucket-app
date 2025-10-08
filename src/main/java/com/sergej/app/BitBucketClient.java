@@ -12,6 +12,9 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 
+/**
+ * Класс, через который выполняются запросы на BitBucket API.
+ */
 public class BitBucketClient {
 
     private final HttpClient client = HttpClient.newHttpClient();
@@ -27,6 +30,12 @@ public class BitBucketClient {
         System.out.println("Авторизация прошла успешно!");
     }
 
+    /**
+     * Делает {@code GET} запрос для получения всех workspace'ов на {@code url}:
+     * <p>
+     * {@code https://api.bitbucket.org/2.0/workspaces}
+     * @return {@link JsonNode} ответ
+     */
     public JsonNode getWorkspaces() {
         if (!hasAccessToken(config)) {
             throw new RuntimeException("No access token to send request!");
@@ -54,6 +63,13 @@ public class BitBucketClient {
         }
     }
 
+    /**
+     * Делает {@code GET} запрос на url:
+     * <p>
+     * {@code https://api.bitbucket.org/2.0/repositories/{workspaceSlug}}
+     * @param workspaceSlug slug workspace'а.
+     * @return {@link JsonNode} ответ
+     */
     public JsonNode getRepositoriesByWorkspace(String workspaceSlug) {
         if (!hasAccessToken(config)) {
             throw new RuntimeException("No access token to send request!");
@@ -80,6 +96,57 @@ public class BitBucketClient {
         }
     }
 
+    /**
+     * Делает {@code GET} запрос на url:
+     * <p>
+     * {@code https://api.bitbucket.org/2.0/workspaces/{workspaceSlug}/members}
+     * @param workspaceSlug slug workspace'а.
+     * @return {@code List<}{@link User}{@code >}
+     */
+    public List<User> getListUsersFromWorkspace(String workspaceSlug) {
+        if (!hasAccessToken(config)) {
+            throw new RuntimeException("No access token to send request!");
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(Config.BASE_URL + "/workspaces/" + workspaceSlug + "/members"))
+                .header(AUTH_HEADER, "Bearer " + config.getAccessToken())
+                .header(ACCEPT_HEADER, "application/json")
+                .GET()
+                .build();
+
+        try {
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = objectMapper.readTree(response.body());
+            getListUsersFromJson(root);
+            return config.getWorkspaceUsers();
+        } catch (Exception e) {
+            System.out.println("Error fetching users from workspace(" + workspaceSlug + ")" + e.getMessage());
+            return null;
+        }
+    }
+
+    private void getListUsersFromJson(JsonNode root) {
+        List<User> users = new ArrayList<>();
+        JsonNode values = root.get("values");
+
+        for (JsonNode item : values) {
+            JsonNode userNode = item.get("user");
+            addUsersToWorkspaceUsersList(userNode, users);
+        }
+        config.setWorkspaceUsers(users);
+    }
+
+    private void addUsersToWorkspaceUsersList(JsonNode userNode, List<User> users) {
+        if (userNode != null && !userNode.isNull()) {
+            var nickname = userNode.get("nickname").asText();
+            var accountId = userNode.get("account_id").asText();
+            var type = userNode.get("type").asText();
+            var uuid = userNode.get("uuid").asText();
+            users.add(new User(nickname, accountId, type, uuid));
+        }
+    }
+
     private void checkResponseStatusCode200(HttpResponse<String> response, String message) {
         if (response.statusCode() != 200) {
             throw new RuntimeException(message + response.body());
@@ -87,11 +154,13 @@ public class BitBucketClient {
     }
 
     private void addWorkspaceSlugs(JsonNode root) {
+        List<String> workspaceSlugs = new ArrayList<>();
         JsonNode values = root.get("values");
         for (JsonNode item : values) {
             String slug = item.get("slug").asText();
-            config.getWorkspaceSlugs().add(slug);
+            workspaceSlugs.add(slug);
         }
+        config.setWorkspaceSlugs(workspaceSlugs);
     }
 
     private void addRepositorySlugs(JsonNode root) {
@@ -104,6 +173,15 @@ public class BitBucketClient {
         config.setRepoSlugs(repoSlugs);
     }
 
+    /**
+     *
+     * Берёт {@code key} и {@code secret} из конфигурации ({@link Config}) и преобразует их в {@code Basic Auth} формат.
+     * А потом делает {@code POST} запрос для получения access_token'а на {@code url}:
+     * <p>
+     * {@code https://bitbucket.org/site/oauth2/access_token}
+     * @param config конфигурация приложения.
+     * @return {@link String} access_token.
+     */
     private String getAccessToken(Config config) {
         String credentials = config.getKey() + ":" + config.getSecret();
         String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
@@ -128,7 +206,7 @@ public class BitBucketClient {
     }
 
     private boolean hasAccessToken(Config config) {
-        return config.getAccessToken() != null && config.getAccessToken().length() > 0;
+        return config.getAccessToken() != null && !config.getAccessToken().isEmpty();
     }
 
     public Config getConfig() {
