@@ -64,6 +64,27 @@ public record Application(BitBucketClient client) {
                 }
                 Commands.printWorkspaceUsers(commands[1], client);
             }
+            case "default-reviewers" -> {
+                if (commands.length != 2) {
+                    Commands.defaultPrint();
+                    break;
+                }
+                Commands.printDefaultReviewersFromCurrentWorkspace(client, commands[1]);
+            }
+            case "rm-default-reviewer" -> {
+                if (commands.length != 3) {
+                    Commands.defaultPrint();
+                    break;
+                }
+                Commands.deleteDefaultReviewer(client, commands[1], commands[2]);
+            }
+            case "add-default-reviewer" -> {
+                if (commands.length != 3) {
+                    Commands.defaultPrint();
+                    break;
+                }
+                Commands.addDefaultReviewer(client, commands[1], commands[2]);
+            }
             default -> Commands.defaultPrint();
         }
     }

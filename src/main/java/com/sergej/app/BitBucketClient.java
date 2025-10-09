@@ -118,15 +118,146 @@ public class BitBucketClient {
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             JsonNode root = objectMapper.readTree(response.body());
-            getListUsersFromJson(root);
+            setListUsersFromJson(root);
             return config.getWorkspaceUsers();
         } catch (Exception e) {
-            System.out.println("Error fetching users from workspace(" + workspaceSlug + ")" + e.getMessage());
+            System.out.println("Error fetching users from workspace(" + workspaceSlug + "): " + e.getMessage());
             return null;
         }
     }
 
-    private void getListUsersFromJson(JsonNode root) {
+    /**
+     * Делает {@code GET} запрос на url:
+     * <p>
+     * {@code https://api.bitbucket.org/2.0/repositories/{workspace}/{repoSlug}/default-reviewers}
+     * @return {@code List<}{@link User}{@code >}
+     */
+    public List<User> getListDefaultReviewers(String workspace, String repoSlug) {
+        if (!hasAccessToken(config)) {
+            throw new RuntimeException("No access token to send request!");
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(Config.BASE_URL + "/repositories/" + workspace + "/" + repoSlug + "/default-reviewers"))
+                .header(AUTH_HEADER, "Bearer " + config.getAccessToken())
+                .GET()
+                .build();
+
+        try {
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = objectMapper.readTree(response.body());
+            return getListDefaultReviewers(root);
+        } catch (Exception ex) {
+            System.out.println("Error fetching default_reviewers from repository(" + repoSlug + ") " +
+                    "in workspace(" + workspace + "): " + ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Делает {@code PUT} запрос на url:
+     * <p>
+     * {@code https://api.bitbucket.org/2.0/repositories/{workspace}/{repoSlug}/default-reviewers/{uuid}}
+     * @param workspace slug of workspace
+     * @param repoSlug slug of repository
+     * @param uuid пользователя uuid
+     */
+    public void addDefaultReviewer(String workspace, String repoSlug, String uuid) {
+        if (!hasAccessToken(config)) {
+            throw new RuntimeException("No access token to send request!");
+        }
+
+        uuid = encodePathSegment(uuid);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(Config.BASE_URL + "/repositories/" + workspace + "/" + repoSlug + "/default-reviewers/" + uuid))
+                .header(AUTH_HEADER, "Bearer " + config.getAccessToken())
+                .PUT(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        try {
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            checkAddDefaultReviewerResponse(response, repoSlug);
+        } catch (Exception ex) {
+            System.out.println("Error adding default_reviewer: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Делает {@code DELETE} запрос на url:
+     * <p>
+     * {@code https://api.bitbucket.org/2.0/repositories/{workspace}/{repoSlug}/default-reviewers/{uuid}}
+     * @param workspace slug of workspace
+     * @param repoSlug slug of repository
+     * @param uuid пользователя uuid
+     */
+    public void deleteDefaultReviewer(String workspace, String repoSlug, String uuid) {
+        if (!hasAccessToken(config)) {
+            throw new RuntimeException("No access token to send request!");
+        }
+
+        uuid = encodePathSegment(uuid);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(Config.BASE_URL + "/repositories/" + workspace + "/" + repoSlug + "/default-reviewers/" + uuid))
+                .header(AUTH_HEADER, "Bearer " + config.getAccessToken())
+                .DELETE()
+                .build();
+
+        try {
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            checkDeleteDefaultReviewerResponse(response, repoSlug);
+        } catch (Exception ex) {
+            System.out.println("Error deleting default_reviewer: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Вспомогательный метод, чтобы закодировать фигурные скобки, потому что их нельзя использовать в {@code URI.create}
+     * в чистом виде.
+     */
+    private static String encodePathSegment(String segment) {
+        return segment.replace("{", "%7B").replace("}", "%7D");
+    }
+
+    private void checkDeleteDefaultReviewerResponse(HttpResponse<String> response, String repoSlug) {
+        if (response.statusCode() != 204) {
+            throw new RuntimeException("Не получилось удалить пользователя " +
+                    "из default-reviewers в репозитории (" + repoSlug + "): " + response.body());
+        }
+        System.out.println("Пользователь успешно удалён из default-reviewers в репозитории (" + repoSlug + ")." );
+    }
+
+    private void checkAddDefaultReviewerResponse(HttpResponse<String> response, String repoSlug) {
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Не получилось добавить пользователя " +
+                    "в default-reviewers в репозиторий (" + repoSlug + "): " + response.body());
+        }
+        System.out.println("Пользователь успешно добавлен в default-reviewers в репозиторий (" + repoSlug + ")." );
+    }
+
+    private List<User> getListDefaultReviewers(JsonNode root) {
+        List<User> defaultReviewers = new ArrayList<>();
+        JsonNode values = root.get("values");
+
+        for (JsonNode item : values) {
+            JsonNode nickname = item.get("nickname");
+            addDefaultReviewersToList(nickname, item, defaultReviewers);
+        }
+        return defaultReviewers;
+    }
+
+    private void addDefaultReviewersToList(JsonNode nickname, JsonNode item, List<User> defaultReviewers) {
+        if (nickname != null && !nickname.isNull()) {
+            var uuid = item.get("uuid").asText();
+            var type = item.get("type").asText();
+            var accountId = item.get("account_id").asText();
+            var nicknameStr = nickname.asText();
+            defaultReviewers.add(new User(nicknameStr, accountId, type, uuid));
+        }
+    }
+
+    private void setListUsersFromJson(JsonNode root) {
         List<User> users = new ArrayList<>();
         JsonNode values = root.get("values");
 

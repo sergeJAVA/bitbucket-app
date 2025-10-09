@@ -194,6 +194,51 @@ public class Commands {
         }
     }
 
+    public static void printDefaultReviewersFromCurrentWorkspace(BitBucketClient client, String repoSlug) {
+        String workspace = client.getConfig().getCurrentWorkspace();
+        if (workspace == null || workspace.isEmpty()) {
+            System.out.println(NO_CURRENT_WORKSPACE);
+            return;
+        }
+
+        List<User> defaultReviewers = client.getListDefaultReviewers(workspace, repoSlug);
+
+        if (defaultReviewers == null) {
+            return;
+        }
+
+        if (defaultReviewers.isEmpty()) {
+            System.out.println("У репозитория (" + repoSlug + ") нет default reviewers.");
+            return;
+        }
+
+        for (int i = 0; i < defaultReviewers.size(); i++) {
+            System.out.println(i + " - " + defaultReviewers.get(i));
+        }
+    }
+
+    public static void addDefaultReviewer(BitBucketClient client, String repoSlug, String uuid) {
+        Config config = client.getConfig();
+        String workspace = config.getCurrentWorkspace();
+        if (workspace == null || workspace.isEmpty()) {
+            System.out.println(NO_CURRENT_WORKSPACE);
+            return;
+        }
+
+        client.addDefaultReviewer(workspace, repoSlug, uuid);
+    }
+
+    public static void deleteDefaultReviewer(BitBucketClient client, String repoSlug, String uuid) {
+        Config config = client.getConfig();
+        String workspace = config.getCurrentWorkspace();
+        if (workspace == null || workspace.isEmpty()) {
+            System.out.println(NO_CURRENT_WORKSPACE);
+            return;
+        }
+
+        client.deleteDefaultReviewer(workspace, repoSlug, uuid);
+    }
+
     private static void changeCurrentWorkspaceByIndex(int index, Config config) {
         if (index >= config.getWorkspaceSlugs().size() || index < 0) {
             System.out.println(NO_WORKSPACE_SLUG_OR_WRONG_INDEX);
