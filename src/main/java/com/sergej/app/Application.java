@@ -37,10 +37,11 @@ public record Application(BitBucketClient client) {
     private void command(String command, BitBucketClient client) {
         switch (command) {
             case "stop" -> setIsRunning(false);
-            case "workspaces" -> Commands.workspacesPrint(client.getConfig());
+            case "workspaces" -> Commands.workspacesPrint(client);
             case "workspace" -> Commands.currentWorkspacePrint(client.getConfig());
             case "repos" -> Commands.getReposFromCurrentWorkspace(client);
             case "workspace-users" -> Commands.printUsersFromCurrentWorkspace(client);
+            case "help" -> Commands.printHelpMessage();
             default -> Commands.defaultPrint();
         }
     }
@@ -64,23 +65,31 @@ public record Application(BitBucketClient client) {
                 }
                 Commands.printWorkspaceUsers(commands[1], client);
             }
-            case "default-reviewers" -> {
+            case "def-reviewers" -> {
                 if (commands.length != 2) {
                     Commands.defaultPrint();
                     break;
                 }
                 Commands.printDefaultReviewersFromCurrentWorkspace(client, commands[1]);
             }
-            case "rm-default-reviewer" -> {
+            case "rm-def-reviewer" -> {
                 if (commands.length != 3) {
                     Commands.defaultPrint();
                     break;
                 }
+                if (commands[1].equals("all")) {
+                    Commands.deleteDefaultReviewerFromAllRepos(client, commands[2]);
+                    break;
+                }
                 Commands.deleteDefaultReviewer(client, commands[1], commands[2]);
             }
-            case "add-default-reviewer" -> {
+            case "add-def-reviewer" -> {
                 if (commands.length != 3) {
                     Commands.defaultPrint();
+                    break;
+                }
+                if (commands[1].equals("all")) {
+                    Commands.addDefaultReviewerToAllRepos(client, commands[2]);
                     break;
                 }
                 Commands.addDefaultReviewer(client, commands[1], commands[2]);

@@ -58,6 +58,29 @@ public class Commands {
             --------------------------------------------
             """;
 
+    public static final String HELP_MESSAGE =
+            """
+           
+            --------------------------------------------
+            stop - Завершить программу.
+            workspaces - Вывод всех workspace'ов.
+            set-workspace <index/slug> - Установить current workspace.
+            workspace - Вывод значения current workspace.
+            repos - Вывод списка репозиториев из current workspace.
+            workspace-users - Вывод всех пользователей из current workspace.
+            workspace-users <slug> - Вывод всех пользователей из определённого workspace'а.
+            def-reviewers <repo_slug> - Вывод списка default-reviewers из определённого репозитория в current workspace.
+            rm-def-reviewer <repo_slug> <uuid> - Удаление пользователя из списка default reviewers у
+              определённого репозитория в current workspace. UUID передавать с фигурными скобками!
+            rm-def-reviewer all <uuid> - Удаление пользователя из списка default reviewers у всех репозиториев.
+              UUID передавать с фигурными скобками!
+            add-def-reviewer <repo_slug> <uuid> - Добавление пользователя в список default reviewers у
+              определённого репозитория в current workspace. UUID передавать с фигурными скобками!
+            add-def-reviewer all <uuid> - Добавление пользователя в список default reviewers у всех репозиториев.
+              UUID передавать с фигурными скобками!
+            --------------------------------------------
+           """;
+
     /**
      * Вывод дефолтного сообщения в консоль.
      */
@@ -66,10 +89,11 @@ public class Commands {
     }
 
     /**
-     * Вывод всех элементов из {@code List<String>} workspaceSlugs класса {@link Config}.
-     * @param config конфигурация приложения.
+     * Обновление списка и вывод всех элементов из {@code List<String>} workspaceSlugs класса {@link Config}.
      */
-    public static void workspacesPrint(Config config) {
+    public static void workspacesPrint(BitBucketClient client) {
+        client.getWorkspaces();
+        Config config = client.getConfig();
         if (config.getWorkspaceSlugs().isEmpty()) {
             System.out.println(NO_WORKSPACES);
             return;
@@ -194,6 +218,9 @@ public class Commands {
         }
     }
 
+    /**
+     * Команда для вывода всех default reviewers из определённого репозитория (из текущего workspace'а) в консоль.
+     */
     public static void printDefaultReviewersFromCurrentWorkspace(BitBucketClient client, String repoSlug) {
         String workspace = client.getConfig().getCurrentWorkspace();
         if (workspace == null || workspace.isEmpty()) {
@@ -217,6 +244,9 @@ public class Commands {
         }
     }
 
+    /**
+     * Команда для добавления пользователя в default reviewers в определённый репозиторий (из текущего workspace'а).
+     */
     public static void addDefaultReviewer(BitBucketClient client, String repoSlug, String uuid) {
         Config config = client.getConfig();
         String workspace = config.getCurrentWorkspace();
@@ -228,6 +258,9 @@ public class Commands {
         client.addDefaultReviewer(workspace, repoSlug, uuid);
     }
 
+    /**
+     * Команда для удаления пользователя из default reviewers в определённом репозитории (из текущего workspace'а).
+     */
     public static void deleteDefaultReviewer(BitBucketClient client, String repoSlug, String uuid) {
         Config config = client.getConfig();
         String workspace = config.getCurrentWorkspace();
@@ -237,6 +270,63 @@ public class Commands {
         }
 
         client.deleteDefaultReviewer(workspace, repoSlug, uuid);
+    }
+
+    /**
+     * Команда для удаления пользователя из default reviewers во всех репозиториях (из текущего workspace'а).
+     */
+    public static void deleteDefaultReviewerFromAllRepos(BitBucketClient client, String uuid) {
+        Config config = client.getConfig();
+        if (config.getCurrentWorkspace() == null || config.getCurrentWorkspace().isEmpty()) {
+            System.out.println(NO_CURRENT_WORKSPACE);
+            return;
+        }
+
+        client.getRepositoriesByWorkspace(config.getCurrentWorkspace());
+        deleteDefaultReviewerFromEachRepo(config.getRepoSlugs(), client, uuid);
+    }
+
+    /**
+     * Команда для добавления пользователя в default reviewers во всех репозиториях (из текущего workspace'а).
+     */
+    public static void addDefaultReviewerToAllRepos(BitBucketClient client, String uuid) {
+        Config config = client.getConfig();
+        if (config.getCurrentWorkspace() == null || config.getCurrentWorkspace().isEmpty()) {
+            System.out.println(NO_CURRENT_WORKSPACE);
+            return;
+        }
+
+        client.getRepositoriesByWorkspace(config.getCurrentWorkspace());
+        addDefaultReviewerToEachRepo(config.getRepoSlugs(), client, uuid);
+    }
+
+    /**
+     * Вывод списка команд.
+     */
+    public static void printHelpMessage() {
+        System.out.println(HELP_MESSAGE);
+    }
+
+    private static void deleteDefaultReviewerFromEachRepo(List<String> repos, BitBucketClient client, String uuid) {
+        if (repos.isEmpty()) {
+            System.out.println("В current workspace ("+ client.getConfig().getCurrentWorkspace() +") нет репозиториев.");
+            return;
+        }
+
+        for (String repo : repos) {
+            client.deleteDefaultReviewer(client.getConfig().getCurrentWorkspace(), repo, uuid);
+        }
+    }
+
+    private static void addDefaultReviewerToEachRepo(List<String> repos, BitBucketClient client, String uuid) {
+        if (repos.isEmpty()) {
+            System.out.println("В current workspace ("+ client.getConfig().getCurrentWorkspace() +") нет репозиториев.");
+            return;
+        }
+
+        for (String repo : repos) {
+            client.addDefaultReviewer(client.getConfig().getCurrentWorkspace(), repo, uuid);
+        }
     }
 
     private static void changeCurrentWorkspaceByIndex(int index, Config config) {

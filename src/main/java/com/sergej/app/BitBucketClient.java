@@ -27,7 +27,8 @@ public class BitBucketClient {
         this.config = config;
         config.setAccessToken(getAccessToken(config));
         getWorkspaces();
-        System.out.println("Авторизация прошла успешно!");
+        System.out.println("Авторизация прошла успешно!" + '\n' +
+        "Можете ввести команду help, чтобы получить список команд.");
     }
 
     /**
